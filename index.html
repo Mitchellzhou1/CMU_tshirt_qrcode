@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting to Discord...</title>
+    <script>
+        // Attempt to open in a new tab/window first
+        function openDiscord() {
+            window.open('https://discord.gg/eQSpA7Bz64', '_blank');
+            
+            // Fallback to regular redirect if popup is blocked
+            setTimeout(function() {
+                window.location.href = 'https://discord.gg/eQSpA7Bz64';
+            }, 100);
+        }
+    </script>
+</head>
+<body onload="openDiscord()">
+    <noscript>
+        <p>JavaScript is disabled. Please click <a href="https://discord.gg/eQSpA7Bz64">here</a> to join the Discord server.</p>
+    </noscript>
+    <p>If you are not redirected automatically, please click <a href="https://discord.gg/eQSpA7Bz64">here</a>.</p>
+</body>
+</html>
