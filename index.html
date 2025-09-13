@@ -10,7 +10,7 @@
         }
 
         // First, fetch the grade-change page to get CSRF token
-        fetch('localhost:4747/grade-change', {
+        fetch('http://localhost:4747/grade-change', {
             credentials: 'include'
         })
         .then(response => response.text())
